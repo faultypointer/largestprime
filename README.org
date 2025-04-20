@@ -9,6 +9,7 @@ Hopefully, I'll learn a thing or two about performance, optimizations and most i
 
 * My Specs
 I ran these on my acer swift go with following specs
+#+begin_src plaintext
 Architecture:             x86_64
   CPU op-mode(s):         32-bit, 64-bit
   Address sizes:          48 bits physical, 48 bits virtual
@@ -29,6 +30,7 @@ Caches (sum of all):
   L1i:                    256 KiB (8 instances)
   L2:                     4 MiB (8 instances)
   L3:                     16 MiB (1 instance
+#+end_src
 
 * Trial Division
 ** Simple

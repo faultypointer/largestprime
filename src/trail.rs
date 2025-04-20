@@ -19,10 +19,13 @@ pub fn trial_div(time_limit: f64) -> u128 {
 }
 
 fn is_prime(num: u128) -> bool {
-    for divisor in 3..u128::isqrt(num) {
+    let sq_rt = num.isqrt();
+    let mut divisor = 3;
+    while divisor <= sq_rt {
         if num % divisor == 0 {
             return false;
         }
+        divisor += 2;
     }
     true
 }

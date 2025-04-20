@@ -1,0 +1,176 @@
+#+title: Largest Prime
+#+author: faultypointer
+#+date: <2025-04-20 Sun>
+
+* What is this?
+I wanna see which algorithm for generating prime numbers can give the largest prime under a given time limit. The time limits I currently use are 1, 3, 5, and 10 seconds.
+
+Hopefully, I'll learn a thing or two about performance, optimizations and most importantly rust.
+
+* My Specs
+I ran these on my acer swift go with following specs
+Architecture:             x86_64
+  CPU op-mode(s):         32-bit, 64-bit
+  Address sizes:          48 bits physical, 48 bits virtual
+  Byte Order:             Little Endian
+CPU(s):                   16
+  On-line CPU(s) list:    0-15
+Vendor ID:                AuthenticAMD
+  Model name:             AMD Ryzen 7 7730U with Radeon Graphics
+    CPU family:           25
+    Model:                80
+    Thread(s) per core:   2
+    Core(s) per socket:   8
+    Socket(s):            1
+    CPU max MHz:          4547.0000
+    CPU min MHz:          400.0000
+Caches (sum of all):
+  L1d:                    256 KiB (8 instances)
+  L1i:                    256 KiB (8 instances)
+  L2:                     4 MiB (8 instances)
+  L3:                     16 MiB (1 instance
+
+* Trial Division
+** Simple
+For every odd number starting from 3, it checks if the number is prime. If it is, it updates the largest prime. When the time is exceed the limit returns the largest prime till that time.
+
+Checking if the number is prime  is done by this function
+#+begin_src rust
+fn is_prime(num: u128) -> bool {
+    for divisor in 2..u128::isqrt(num) {
+        if num % divisor == 0 {
+            return false;
+        }
+    }
+    true
+}
+#+end_src
+
+*** Result
+Here is the output from one of the run.
+Largest Prime in 1 sec: 2923069
+Largest Prime in 3 sec: 6432421
+Largest Prime in 5 sec: 11370449
+Largest Prime in 10 sec: 20405683
+
+*** Performance
+Let's have a look at the flamegraph.
+#+CAPTION: Flamegraph of simple trial division method
+[[./flamegraphs/trial-first.svg]]
+
+
+As you can see, the main culprit is the `is_prime` function (obviously) in which the main function is something called `_umodti3`, which I'm assuming is the thing that performs the modulo operation.
+
+*** Minor improvement
+The `is_prime` function doesn't need to check if 2 divides the number since we start from an odd number and increment it by 2 so there will not be any even number passed to the function. So we can just do this.
+#+begin_src rust
+for divisor in 3..u128::isqrt(num)
+#+end_src
+
+This seems like it shouldn't make much of a difference but for time 1 and 3 seconds and even 5 seconds, the difference is quite noticable.
+Largest Prime in 1 sec: 3962047
+Largest Prime in 3 sec: 8691593
+Largest Prime in 5 sec: 12483463
+Largest Prime in 10 sec: 20406791
+
+I don't think its a fluke. I ran it couple of times and it seems consistent with this number.
+
+This leads us to our first (technically second i guess) attempt to reduce that modulo operation.
+
+** Odd Divisors
+Well since we are always passing an odd number to `is_prime`, checking if that number is divisible by any even number is pointless since we know it will not be divisible. so we can just check by the odd numbers. thus giving this `is_prime` function
+#+begin_src rust
+fn is_prime(num: u128) -> bool {
+    let sq_rt = num.isqrt();
+    let mut divisor = 3;
+    while divisor <= sq_rt {
+        if num % divisor == 0 {
+            return false;
+        }
+        divisor += 2;
+    }
+    true
+}
+#+end_src
+
+*** Result
+So how much did it improve.
+Largest Prime in 1 sec: 4620431
+Largest Prime in 3 sec: 10257041
+Largest Prime in 5 sec: 18384221
+Largest Prime in 10 sec: 32641879
+
+*** Performance
+So any change in the flamegraph.
+[[./flamegraphs/trial-odd.svg]]
+
+I don't see any immediate difference. Still the modulo operation is dominating.
+
+* Sieves
+These are somewhat tricky to find under the given time limit. First of all there is no "largest prime currently". Secondly, sieve algorithms (as far as i know, which is not a lot right now, just this eratosthenes) need a fixed limit N upto which they search. Its better to just show.
+** Sieve of Eratosthenes
+Here is the code.
+#+begin_src rust
+const MAX_N: usize = 1_000_000_000;
+pub fn eratosthenes(time_limit: f64) -> usize {
+    let timer = Instant::now();
+    let mut primes = vec![true; MAX_N];
+    for p in 2..primes.len() {
+        if primes[p] {
+            if timer.elapsed().as_secs_f64() > time_limit {
+                return p;
+            }
+            for multiple in primes.iter_mut().skip(p * p).step_by(p) {
+                *multiple = false;
+            }
+        }
+    }
+    for (i, p) in primes.iter().rev().enumerate() {
+        if *p == true {
+            return MAX_N - i - 1;
+        }
+    }
+    return 2;
+}
+
+#+end_src
+
+As you can see, there are two limits at play here. First the `MAX_N` that is the upper limit upto where the algorithm searches. The second is the time limit. If the `MAX_N` is small enough that the outer for loop can fully complete before the time limit then everything works fine and we calculate the index of the first true from the back of the list to get the largest prime number.
+If the time limit hit early then we return p because past that we don't know if any true are actually prime or not since they can be multiples of primes after p.
+Well that is not actually true. We know for sure that any true before p * p is guaranteed to be a prime.
+To see why that is suppose that we have reached prime p and now want to mark its multiple as false. we could start with p + p, then p + 2p + p + 3p and so on until the last element. but lets write the multiples a little differently. p + p can be written as 2 * p, p + 2p can be written as 3 * p and so on 2 * 2 * p, 5 * p, 2 * 3 * p ... p * p, (p+1) * p ...
+Thus any multiple before p * p would have already been marked by primes before it and any unmarked numbers are the primes before p themselves.
+
+This is exactly the reason we start the multiple skipping to `p * p` here
+`for multiple in primes.iter_mut().skip(p * p).step_by(p)`
+
+So we could actually get the actual guaranteed prime by finding the index of the farthest true before p * p but as you will see it's not much of an improvement.
+
+Lets get to the results.
+*** Result
+the one billion in the code is the limit after with the time limit exceed before we can finish the loop. (I only checked for 2 billion so maybe 1.5 billion or other limit before 2 billion). anyway results.
+Largest Prime in 1 sec: 23
+Largest Prime in 3 sec: 151
+Largest Prime in 5 sec: 557
+Largest Prime in 10 sec: 999999937
+
+Yea. I forgot to mention that 1 billion was only for the 10 second time limit. Also see that 557 * 557 < 360,000 is not something that could justify the hassle of calculating the actual largest prime until then.
+
+So after manually checking what `MAX_N` works for each time limit there are the resuts
+Largest Prime in 1 sec: 74999959 (MAX_N: 75M, closest MAX_N failed for: 80M)
+Largest Prime in 3 sec: 199999991 (MAX_N: 200M, closest MAX_N failed for: 300M)
+Largest Prime in 5 sec: 499999993 (MAX_N: 500M, closest MAX_N failed for: 600M)
+Largest Prime in 10 sec: 999999937
+
+NOTE that these values fluctuate.
+
+*** Performance
+or should I saw flamegraph
+[[./flamegraphs/sieve-erato.svg]]
+
+I don't actually know what to say here. It seems fine since almost all the time is used by the iteration and looping. (I am not an expert or even someone with all the basics of knowledge in performance stuff (I don't even know the term I should use here (also parens inside parens (feels like im doing lisp again (didn't do it much (just something to pass the time while preparing for exams)))))).
+
+
+
+* Resources
+- https://en.wikipedia.org/wiki/Sieve_of_Eratosthenes#Algorithm_and_variants

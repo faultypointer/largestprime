@@ -1,11 +1,11 @@
 use std::time::Instant;
 
-pub fn trial_div() -> u128 {
+pub fn trial_div(time_limit: f64) -> u128 {
     let mut largest_prime_till_now = 3;
     let mut current_num = 3;
     let timer = Instant::now();
     loop {
-        if timer.elapsed().as_secs_f64() > 1.0 {
+        if timer.elapsed().as_secs_f64() > time_limit {
             break;
         }
         current_num += 2;
@@ -19,7 +19,7 @@ pub fn trial_div() -> u128 {
 }
 
 fn is_prime(num: u128) -> bool {
-    for divisor in 2..u128::isqrt(num) {
+    for divisor in 3..u128::isqrt(num) {
         if num % divisor == 0 {
             return false;
         }
